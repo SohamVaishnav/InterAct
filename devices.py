@@ -1,0 +1,1 @@
+# Use this to create functions and classes to handle logging of devices in the Social Interact setup.
