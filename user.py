@@ -3,6 +3,8 @@ import sys
 import pandas as pd
 import json
 import socket
+import datetime
+
 class User(object):
     """
     Class representing a user in the system.
@@ -22,95 +24,141 @@ class User(object):
             self.usr_file = pd.DataFrame(columns=['name', 'ip_address', 'port', 'self', 'status', 'last_active', 'mode']).to_csv(os.path.join(self.root_usr_dir, "users.csv"), index=False)
     
         self.usr_file = pd.read_csv(os.path.join(self.root_usr_dir, "users.csv"))
+        self.make_all_offline()
         
-        identify = self.usr_file[self.usr_file['self'] == 1]
-        if not identify.empty:
+        self.identify = self.usr_file[self.usr_file['self'] == 1]
+        if not self.identify.empty:
             self.account_exists = True
-            self.name = identify['name'].values[0]
-            self.port = identify['port'].values[0]
-            self.ip_address = identify['ip_address'].values[0]
+            self.name = self.identify['name'].values[0]
+            self.file_transfer_port = self.identify['port'].values[0]
+            self.ip_address = self.identify['ip_address'].values[0]
         else:
             self.account_exists = False
             self.name = f'Device_new'
-            self.port = None
-            self.ip_address = None
-            
+            self.file_transfer_port = 9000
+            self.ip_address = self.get_ip()
+
         self.contacts = self.usr_file[self.usr_file['self'] == 0]
 
     def __str__(self):
         return f"User(name={self.name}, ip_address={self.ip_address}, port={self.port})"
     
-    def create_account(self, **kwargs):
+    def get_ip(self):
         """
-        Create a new user account with the provided details.
-
-        Args:
-            **kwargs: User details such as name, email_id, and password.
-        Raises:
-            AssertionError: If any required field is missing.
+        Get the local IP address of the device.
         """
-        self.name = kwargs.get('name', self.name)
-        self.email_id = kwargs.get('email_id', self.email_id)
-        self.password = kwargs.get('password', self.password)
-        assert (self.name != None and self.email_id != None and self.password != None), "Name is required to create an account."
-        print(f"Welcome, {self.name}!")
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(('10.255.255.255', 1))
+            ip = s.getsockname()[0]
+        except Exception:
+            ip = '127.0.0.1' # loopback address in case of connection failure
+        finally:
+            s.close()
+        return ip
 
-    def complete_account(self, **kwargs):
+    def make_all_offline(self):
         """
-        Update user account details.
-
-        Args:
-            **kwargs: Additional user details such as age, education, location, and occupation.
-        Raises:
-            AssertionError: If any required field is missing.
+        Sets all the contacts to `offline` status in the user file. 
         """
-        print("Updating account details ...")
-        self.age = kwargs.get('age', None)
-        assert self.age != None,  "Age is required to create an account."
+        if not self.usr_file.empty:
+            self.usr_file['status'] = 'offline'
+            self.usr_file[self.usr_file['self'] == 1]['status'] = 'online'
+            self.usr_file.to_csv(os.path.join(self.root_usr_dir, "users.csv"), index=False)
+    
+    def update_user(self, **kwargs):
+        """
+        Update the user details in the user file.
+        """
+        if 'name' in kwargs:
+            self.name = kwargs['name']
+        if 'file_transfer_port' in kwargs:
+            self.file_transfer_port = kwargs['file_transfer_port']
 
-        self.education = kwargs.get('education', None)
-        self.education = self.education.lower()
-        assert self.education != None, "Education is required to create an account."
-
-        self.location = kwargs.get('location', None)   
-
-        if self.education not in ["school", "college", "university"]:
-            self.occupation = kwargs.get('occupation', None)
-            assert self.occupation != None, "Since Education is over, Occupation is required to create an account."
+        if not self.account_exists:
+            new_user = pd.DataFrame({
+                'name': [self.name],
+                'ip_address': [self.ip_address],
+                'port': [self.file_transfer_port],
+                'self': [1],
+                'status': ['online'],
+                'last_active': [datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+                'mode': ['auto']
+            })
+            self.usr_file = pd.concat([self.usr_file, new_user], ignore_index=True)
+            self.account_exists = True
         else:
-            self.occupation = "Student"
+            self.usr_file.loc[self.usr_file['self'] == 1, ['name', 'ip_address', 'port', 'status', 'last_active']] = [
+                self.name, self.ip_address, self.file_transfer_port, 'online', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            ]
         
-    def save_user(self):
-        """
-        Saves the information about the user to a CSV file and registers the user into the system."
-        """
-        usr_temp_file_name = f"{self.name}.csv"
-        usr_temp_file_path = os.path.join(self.root_usr_dir, usr_temp_file_name)
-        usr_temp_file = pd.DataFrame({
-            'name': [self.name],
-            'email_id': [self.email_id],
-            'password': [self.password],
-            'age': [self.age],
-            'education': [self.education],
-            'location': [self.location],
-            'occupation': [self.occupation]
-        })
-        usr_temp_file.to_csv(usr_temp_file_path, index=False)
-        self.usr_file = pd.concat([self.usr_file, usr_temp_file], ignore_index=True)
         self.usr_file.to_csv(os.path.join(self.root_usr_dir, "users.csv"), index=False)
+        self.identify = self.usr_file[self.usr_file['self'] == 1]
+        self.contacts = self.usr_file[self.usr_file['self'] == 0]
     
-    def change_profile(self):
+    def get_contacts(self):
         """
-        Call to change the profile details of the user.
+        Get the contacts of the user.
         """
-        pass
+        return self.contacts
 
-    def change_settings(self):
+    def get_contacts_by_name(self, name:str):
         """
-        Call to the change the user settings - permissions, privacy, etc.
+        Get the contacts of the user by name.
+        Args:
+            name (str): The name of the contact to search for.
         """
-        pass
+        return self.contacts[self.contacts['name'] == name]
+
+    def update_contacts_status(self, ip_address:str, status:str, **kwargs):
+        """
+        Updates the status of the contact with the given IP address.
+
+        Args:
+            ip_address (str): The IP address of the contact.
+            status (str): The new status to set for the contact.
+            kwargs: Additional keyword arguments to update other fields (like port, last_active, etc.).
+        """
+        self.contacts.loc[self.contacts['ip_address'] == ip_address, 'status'] = status
+        if 'port' in kwargs:
+            self.contacts.loc[self.contacts['ip_address'] == ip_address, 'port'] = kwargs['port']
+        if 'last_active' in kwargs:
+            self.contacts.loc[self.contacts['ip_address'] == ip_address, 'last_active'] = kwargs['last_active']
+        else:
+            self.contacts.loc[self.contacts['ip_address'] == ip_address, 'last_active'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.usr_file = pd.concat([self.identify, self.contacts], ignore_index=True)
+        self.urs_file.to_csv(os.path.join(self.root_usr_dir, "users.csv"), index=False)
+
+        self.identify = self.usr_file[self.usr_file['self'] == 1]
+        self.contacts = self.usr_file[self.usr_file['self'] == 0]
     
+    def add_manually(self, name:str, ip_address:str, port:int):
+        """
+        Add a contact manually to the user file.
+
+        Args:
+            name (str): The name of the contact.
+            ip_address (str): The IP address of the contact.
+            port (int): The port of the contact.
+        """
+        if not self.account_exists:
+            raise ValueError("User account does not exist. Please create an account first.")
+        
+        new_contact = pd.DataFrame({
+            'name': [name],
+            'ip_address': [ip_address],
+            'port': [port],
+            'self': [0],
+            'status': ['offline'],
+            'last_active': [datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+            'mode': ['manual']
+        })
+        
+        self.usr_file = pd.concat([self.usr_file, new_contact], ignore_index=True)
+        self.usr_file.to_csv(os.path.join(self.root_usr_dir, "users.csv"), index=False)
+
+        self.contacts = self.usr_file[self.usr_file['self'] == 0]
+
     def get_user_stats(self):
         """
         Call to get the user statistics such as number of groups joined, number of connections, etc.
@@ -119,4 +167,6 @@ class User(object):
 
     # Add more functions later
 
+# c = User(root_usr_dir="./Data")
+# c.get_local_ip()
 
