@@ -119,20 +119,24 @@ class User(object):
             status (str): The new status to set for the contact.
             kwargs: Additional keyword arguments to update other fields (like port, last_active, etc.).
         """
-        self.contacts.loc[self.contacts['ip_address'] == ip_address, 'status'] = status
-        if 'port' in kwargs:
-            self.contacts.loc[self.contacts['ip_address'] == ip_address, 'port'] = kwargs['port']
-        if 'last_active' in kwargs:
-            self.contacts.loc[self.contacts['ip_address'] == ip_address, 'last_active'] = kwargs['last_active']
+        contact_exists = self.contacts[self.contacts['ip_address'] == ip_address]
+        if contact_exists.empty:
+            self.add_manually(name=kwargs.get('name', 'Unknown'), ip_address=ip_address, port=kwargs.get('port'), mode=kwargs.get('mode', 'auto'), status=status)
         else:
-            self.contacts.loc[self.contacts['ip_address'] == ip_address, 'last_active'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.usr_file = pd.concat([self.identify, self.contacts], ignore_index=True)
-        self.urs_file.to_csv(os.path.join(self.root_usr_dir, "users.csv"), index=False)
+            self.contacts.loc[self.contacts['ip_address'] == ip_address, 'status'] = status
+            if 'port' in kwargs:
+                self.contacts.loc[self.contacts['ip_address'] == ip_address, 'port'] = kwargs['port']
+            if 'last_active' in kwargs:
+                self.contacts.loc[self.contacts['ip_address'] == ip_address, 'last_active'] = kwargs['last_active']
+            else:
+                self.contacts.loc[self.contacts['ip_address'] == ip_address, 'last_active'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.usr_file = pd.concat([self.identify, self.contacts], ignore_index=True)
+            self.urs_file.to_csv(os.path.join(self.root_usr_dir, "users.csv"), index=False)
 
-        self.identify = self.usr_file[self.usr_file['self'] == 1]
-        self.contacts = self.usr_file[self.usr_file['self'] == 0]
+            self.identify = self.usr_file[self.usr_file['self'] == 1]
+            self.contacts = self.usr_file[self.usr_file['self'] == 0]
     
-    def add_manually(self, name:str, ip_address:str, port:int):
+    def add_manually(self, name:str, ip_address:str, port:int, mode:str='manual', status:str='offline'):
         """
         Add a contact manually to the user file.
 
@@ -149,9 +153,9 @@ class User(object):
             'ip_address': [ip_address],
             'port': [port],
             'self': [0],
-            'status': ['offline'],
+            'status': [status],
             'last_active': [datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
-            'mode': ['manual']
+            'mode': [mode]
         })
         
         self.usr_file = pd.concat([self.usr_file, new_contact], ignore_index=True)
