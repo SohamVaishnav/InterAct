@@ -40,6 +40,8 @@ class InterActTerminal(cmd.Cmd):
             print("\n")
         print(f"Hey, {colored(self.curr_device.name, 'green')}! What's up?")
         print(f"Type {colored('help', 'yellow', attrs=['underline'])} or {colored('?', 'yellow', attrs=['underline'])} to see the available commands.\n")
+
+        self.radar = Radar(root_usr_dir="./Data", curr_device=self.curr_device)
     
     def do_register(self, arg):
         """Register this device with a name: register <device_name>"""
@@ -82,11 +84,20 @@ class InterActTerminal(cmd.Cmd):
             print("Usage: add_manual <device_name> <ip_address> <port>")
             return
         device_name, ip_address, port = parts
-        self.curr_device.add_manually(device_name, ip_address, port)
-        print(f"Device '{colored(device_name, 'blue')}' added to contacts.")
+        device_reachable = self.radar.verify(device_name, ip_address, port)
+        if device_reachable:
+            self.curr_device.add_manually(device_name, ip_address, port)
+            print(f"Device '{colored(device_name, 'blue')}' added to contacts.")
     
-    def do_add(self, arge):
-        """Add a device to your contacts: add <device_name>"""
+    def do_add(self, arg):
+        """Add a device to your contacts: add <indices>"""
+        if not arg:
+            print("Usage: add <indices>")
+            print("Example: add 0 1 2")
+            return
+        indices_str = arg.strip()
+        indices = indices_str.split(' ')
+        self.radar.save_devices_as_contacts([int(i) for i in indices if i.isdigit()])
     
     def do_clear(self, arg):
         """Clear the terminal screen."""
