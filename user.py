@@ -2,8 +2,7 @@ import os
 import sys
 import pandas as pd
 import json
-import argparse
-
+import socket
 class User(object):
     """
     Class representing a user in the system.
@@ -20,13 +19,26 @@ class User(object):
         if not(os.path.exists(self.root_usr_dir)):
             os.makedirs(self.root_usr_dir)
         if not(os.path.exists(self.root_usr_dir + "/users.csv")):
-            self.usr_file = pd.DataFrame(columns=['name', 'email_id', 'password', 'age', 'education', 'location', 'occupation']).to_csv(os.path.join(self.root_usr_dir, "users.csv"), index=False)
+            self.usr_file = pd.DataFrame(columns=['name', 'ip_address', 'port', 'self', 'status', 'last_active', 'mode']).to_csv(os.path.join(self.root_usr_dir, "users.csv"), index=False)
+    
+        self.usr_file = pd.read_csv(os.path.join(self.root_usr_dir, "users.csv"))
+        
+        identify = self.usr_file[self.usr_file['self'] == 1]
+        if not identify.empty:
+            self.account_exists = True
+            self.name = identify['name'].values[0]
+            self.port = identify['port'].values[0]
+            self.ip_address = identify['ip_address'].values[0]
         else:
-            self.usr_file = pd.read_csv(os.path.join(self.root_usr_dir, "users.csv"))
-        #for now ... might add something later
+            self.account_exists = False
+            self.name = f'Device_new'
+            self.port = None
+            self.ip_address = None
+            
+        self.contacts = self.usr_file[self.usr_file['self'] == 0]
 
     def __str__(self):
-        return f"User(name={self.name}, email_id={self.email_id})"
+        return f"User(name={self.name}, ip_address={self.ip_address}, port={self.port})"
     
     def create_account(self, **kwargs):
         """
