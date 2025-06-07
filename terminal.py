@@ -3,15 +3,22 @@ from pyfiglet import Figlet
 import os
 import sys
 from termcolor import colored
+from prompt_toolkit import prompt
+from prompt_toolkit.completion import WordCompleter
 
 curr_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(curr_dir))
 
 from user import *
+from devices import *
 
 f = Figlet(font='slant')
 print(f.renderText('InterAct'))
 
+word_completer = WordCompleter([
+    'register', 'self_config', 'show_contacts', 'discover', 
+    'add_manually', 'add', 'clear', 'exit'
+    ])
 class InterActTerminal(cmd.Cmd):
     prompt = colored("interact~ ","green", attrs=['bold'])
 
