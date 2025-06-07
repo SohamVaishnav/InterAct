@@ -63,7 +63,7 @@ class User(object):
         """
         if not self.usr_file.empty:
             self.usr_file['status'] = 'offline'
-            self.usr_file[self.usr_file['self'] == 1]['status'] = 'online'
+            self.usr_file.loc[self.usr_file['self'] == 1, ['status']] = ['online']
             self.usr_file.to_csv(os.path.join(self.root_usr_dir, "users.csv"), index=False)
     
     def update_user(self, **kwargs):
