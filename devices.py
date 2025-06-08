@@ -62,8 +62,7 @@ class Radar(object):
                 'ip_address': socket.inet_ntoa(info.addresses[0]),
                 'port': info.port,
                 'status': 'online',
-                'last_active': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                'mode': 'auto'
+                'last_active': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
 
             if device['name'] == self.curr_device.name:
@@ -71,7 +70,7 @@ class Radar(object):
             
             contact_exists = self.curr_device.get_contacts_by_name(device['name'])
             if not contact_exists.empty:
-                self.curr_device.update_contacts_status(device['ip_address'], 'online', port=device['port'], last_active=device['last_active'], name=device['name'], mode=device['mode'])
+                self.curr_device.update_contacts_status(device['ip_address'], 'online', port=device['port'], last_active=device['last_active'], name=device['name'], mode=contact_exists['mode'].values[0])
             
             existing_device = next((d for d in self.devices if d['ip_address'] == device['ip_address']), None)
             if existing_device:
@@ -126,20 +125,32 @@ class Radar(object):
         try:
             socket.setdefaulttimeout(2)
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect((ip_address, port))
+            sock.connect((ip_address, self.ping_port))
             sock.close()
             print(f"Device {colored(device_name, 'blue')} at {colored(ip_address, 'cyan')}:{colored(port, 'light_cyan')} is online.")
+            contact_exists = self.curr_device.get_contacts_by_name(device_name)
+            if not contact_exists.empty:
+                self.curr_device.update_contacts_status(ip_address, 'online', port=port, last_active=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), name=device_name, mode=contact_exists['mode'].values[0])
+            
+            for device in self.devices:
+                if device['ip_address'] == ip_address and device['port'] == port:
+                    device['status'] = 'online'
+                    device['last_active'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    break
             return True
+    
         except (socket.timeout, ConnectionRefusedError):
             print(f"Device {colored(device_name, 'blue')} at {colored(ip_address, 'cyan')}:{colored(port, 'light_cyan')} is offline or unreachable.")
+            contact_exists = self.curr_device.get_contacts_by_name(device_name)
+            if not contact_exists.empty:
+                self.curr_device.update_contacts_status(ip_address, 'offline', port=port, last_active=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), name=device_name, mode=contact_exists['mode'].values[0])
+
+            for device in self.devices:
+                if device['ip_address'] == ip_address and device['port'] == port:
+                    device['status'] = 'offline'
+                    device['last_active'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    break
             return False
-        # info = Zeroconf().get_service_info(self.service_type, device_name + '.' + self.service_type)
-        # if info:
-        #     ip_address = socket.inet_ntoa(info.addresses[0])
-        #     if ip_address == ip_address and info.port == port:
-        #         return True
-        # print(f"Device {colored(device_name, 'blue')} at {colored(ip_address, 'cyan')}:{colored(port, 'light_cyan')} is offline or unreachable.")
-        # return False
     
     def show_devices(self):
         """
@@ -173,7 +184,7 @@ class Radar(object):
         for index in indices:
             assert 0 <= index-1 < len(self.devices), f"Index {index} is out of range for discovered devices."
             device = self.devices[index-1]
-            self.curr_device.update_contacts_status(device['ip_address'], 'online', port=device['port'], last_active=device['last_active'], name=device['name'], mode=device['mode'])
+            self.curr_device.update_contacts_status(device['ip_address'], 'online', port=device['port'], last_active=device['last_active'], name=device['name'], mode='auto')
             # print(f"Device {colored(device['name'], 'blue')} at {colored(device['ip_address'], 'cyan')}:{colored(device['port'], 'light_cyan')} saved as contact.")
         print(f"Selected devices have been saved as contacts in your contact list. You can check the contacts using the {colored('show_contacts', 'yellow', attrs=['underline'])} command.")
     
@@ -250,9 +261,9 @@ class Radar(object):
         """
         Pings the other device to ensure its availability.        
         """
-        ping_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        ping_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         ping_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        ping_socket.settimeout(2)
+
         try:
             ping_socket.bind(('', self.ping_port))
             ping_socket.listen(1)
@@ -261,7 +272,6 @@ class Radar(object):
                 connection.close()
         except OSError as e:
             print(f"Socket error: {e}. Ping port might be already in use. Please try a different port.")
-            print(ping_socket.getsockname())
         except KeyboardInterrupt:
             print("Stopping the ping server.")
         except Exception as e:
