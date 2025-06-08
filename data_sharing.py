@@ -55,12 +55,8 @@ class DataSharing(object):
         """
         sender_ip, sender_port = sender_address
         threading.current_thread().name = f"Receiving_Thread-{sender_ip}:{sender_port}"
-        sender_info = self.curr_device.get_contacts_by_ip(sender_ip)
-        if not sender_info.empty:
-            print(f"Sender identified as {colored(sender_info['name'], 'blue')} at {colored(sender_ip, 'cyan')}:{colored(sender_port, 'light_cyan')}")
-        else:
-            print(f"Sender not in your contacts. Identified at {colored(sender_ip, 'cyan')}:{colored(sender_port, 'light_cyan')}")
-
+        print(f"Sender identified at {colored(sender_ip, 'cyan')}:{colored(sender_port, 'light_cyan')}")
+        
         try:
             meta_data = sender_socket.recv(self.file_packet_size)
             if not meta_data:
@@ -72,10 +68,6 @@ class DataSharing(object):
                 filename, filesize, sender_name = meta_data
                 filesize = int(filesize)
 
-                if sender_info.empty:
-                    print(f"Unknown sender name found in metadata - {colored(sender_name, 'blue')}.")
-                if not sender_info.empty and sender_info['name'].values[0] != sender_name:
-                    print(f"Sender name {colored('mismatch', 'red')}: {colored(sender_info['name'], 'blue')} vs {colored(sender_name, 'yellow')}. Using metadata sender name.")
                 print(f"Receiving file '{colored(filename, 'yellow')}' ({colored(str(filesize), 'light_yellow')} bytes) from {colored(sender_name, 'blue')}.")
             else:
                 print("Sender name not provided in metadata. Naming sender using IP Adress.")
@@ -180,19 +172,20 @@ class DataSharing(object):
             # receiver_ip = socket.inet_ntoa(info.addresses[0])
             for device in self.radar.devices:
                 if device['name'] == receiver_name:
-                    receiver_ip = device.ip_address
-                    self.send_file_flag = (device.status == 'online').values[0]
+                    receiver_ip = device['ip_address']
+                    receiver_port = device['port']
+                    self.send_file_flag = device['status'] == 'online'
                     break
         else:
             print(f"Receiver {colored(receiver_name, 'blue')} found in contacts. Checking availability...")
             self.send_file_flag = (receiver_info['status'] == 'online').values[0]
             receiver_ip = receiver_info['ip_address'].values[0]
+            receiver_port = int(receiver_info['port'].values[0])
         if not self.send_file_flag:
             print(f"Receiver {colored(receiver_name, 'blue')} is {colored('offline', 'red')}. Please check the device and try again.")
             return
         print(colored("Receiver is online.", 'green'))
         print(f"Initiating file transfer to {colored(receiver_name, 'blue')} at {colored(receiver_ip, 'cyan')}...")
-        receiver_port = int(receiver_info['port'].values[0]) if not receiver_info.empty else ValueError(colored("Receiver port not found in contacts.", 'red'))
         receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             receiver_socket.connect((receiver_ip, receiver_port))
