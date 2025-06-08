@@ -6,6 +6,7 @@ import socket
 from zeroconf import Zeroconf, ServiceBrowser, ServiceInfo
 import datetime
 from termcolor import colored
+import time
 
 parent_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(parent_dir)
@@ -62,9 +63,25 @@ class Radar(object):
                 'last_active': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 'mode': 'auto'
             }
-            self.devices.append(device)
-            print(f"Device {colored(device['name'], 'blue')} at {colored(device['ip_address'], 'cyan')}:{colored(device['port'], 'light_cyan')} found {colored('online', 'green')}.")
+
+            if device['name'] == self.curr_device.name:
+                return
+            
+            contact_exists = self.curr_device.get_contacts_by_name(device['name'])
+            if not contact_exists.empty:
+                self.curr_device.update_contacts_status(device['ip_address'], 'online', port=device['port'], last_active=device['last_active'], name=device['name'], mode=device['mode'])
+            
+            existing_device = next((d for d in self.devices if d['ip_address'] == device['ip_address']), None)
+            if existing_device:
+                for key in device:
+                    existing_device[key] = device[key]
+            else:
+                self.devices.append(device)
+            
             # self.curr_device.update_contacts_status(device['ip_address'], 'online', port=device['port'], last_active=device['last_active'], name=device['name'], mode=device['mode'])
+            #
+
+            # print(f"\nDevice {colored(device['name'], 'blue')} at {colored(device['ip_address'], 'cyan')}:{colored(device['port'], 'light_cyan')} found {colored('online', 'green')}.")
         else:
             return
     
@@ -83,10 +100,9 @@ class Radar(object):
         device_info = self.curr_device.get_contacts_by_name(device_name)
         if not device_info.empty:
             self.curr_device.update_contacts_status(device_info['ip_address'], 'offline')
-            print(f"Device {colored(device_name, 'blue')} at {colored(device_info['ip_address'], 'cyan')} went {colored('offline', 'red')}.")
+            print(f"Device {colored(device_name, 'blue')} at {colored(device_info['ip_address'].values[0], 'cyan')} went {colored('offline', 'red')}.")
         self.devices = [device for device in self.devices if device['name'] != device_name]
 
-    
     def update_service(self, zeroconf_instance, type, name): 
         """
         Updates device
@@ -105,23 +121,23 @@ class Radar(object):
         Returns:
             bool: True if the device is truly online, False otherwise.
         """
-        # try:
-        #     socket.setdefaulttimeout(2)
-        #     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #     sock.connect((ip_address, port))
-        #     sock.close()
-        #     print(f"Device {colored(device_name, 'blue')} at {colored(ip_address, 'cyan')}:{colored(port, 'light_cyan')} is online.")
-        #     return True
-        # except (socket.timeout, ConnectionRefusedError):
-        #     print(f"Device {colored(device_name, 'blue')} at {colored(ip_address, 'cyan')}:{colored(port, 'light_cyan')} is offline or unreachable.")
-        #     return False
-        info = Zeroconf().get_service_info(self.service_type, device_name + '.' + self.service_type)
-        if info:
-            ip_address = socket.inet_ntoa(info.addresses[0])
-            if ip_address == ip_address and info.port == port:
-                return True
-        print(f"Device {colored(device_name, 'blue')} at {colored(ip_address, 'cyan')}:{colored(port, 'light_cyan')} is offline or unreachable.")
-        return False
+        try:
+            socket.setdefaulttimeout(2)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect((ip_address, port))
+            sock.close()
+            print(f"Device {colored(device_name, 'blue')} at {colored(ip_address, 'cyan')}:{colored(port, 'light_cyan')} is online.")
+            return True
+        except (socket.timeout, ConnectionRefusedError):
+            print(f"Device {colored(device_name, 'blue')} at {colored(ip_address, 'cyan')}:{colored(port, 'light_cyan')} is offline or unreachable.")
+            return False
+        # info = Zeroconf().get_service_info(self.service_type, device_name + '.' + self.service_type)
+        # if info:
+        #     ip_address = socket.inet_ntoa(info.addresses[0])
+        #     if ip_address == ip_address and info.port == port:
+        #         return True
+        # print(f"Device {colored(device_name, 'blue')} at {colored(ip_address, 'cyan')}:{colored(port, 'light_cyan')} is offline or unreachable.")
+        # return False
     
     def show_devices(self):
         """
@@ -133,7 +149,8 @@ class Radar(object):
         
         print("Discovered devices:")
         for device in self.devices:
-            print(f" - {colored(device['name'], 'blue')} (IP: {colored(device['ip_address'], 'cyan')}, Port: {colored(device['port'], 'light_cyan')}, Status: {colored(device['status'], 'green')}, Last Active: {device['last_active']}, Mode: {device['mode']})")
+            status_color = 'green' if device['status'] == 'online' else 'red'
+            print(f" - {colored(device['name'], 'blue')} (IP: {colored(device['ip_address'], 'cyan')}, Port: {colored(device['port'], 'light_cyan')}, Status: {colored(device['status'], status_color)})")
         
     def save_devices_as_contacts(self, indices:list):
         """
@@ -152,11 +169,11 @@ class Radar(object):
         assert indices, "Indices list cannot be empty."
 
         for index in indices:
-            assert 0 <= index < len(self.devices), f"Index {index} is out of range for discovered devices."
-            device = self.devices[index]
+            assert 0 <= index-1 < len(self.devices), f"Index {index} is out of range for discovered devices."
+            device = self.devices[index-1]
             self.curr_device.update_contacts_status(device['ip_address'], 'online', port=device['port'], last_active=device['last_active'], name=device['name'], mode=device['mode'])
             # print(f"Device {colored(device['name'], 'blue')} at {colored(device['ip_address'], 'cyan')}:{colored(device['port'], 'light_cyan')} saved as contact.")
-        print(f"Selected devices have been saved as contacts in your contact list. You can check the contacts using the {colored('show_contacts', 'yellow', attrs=['underlined'])} command.")
+        print(f"Selected devices have been saved as contacts in your contact list. You can check the contacts using the {colored('show_contacts', 'yellow', attrs=['underline'])} command.")
     
     def announce(self):
         """
@@ -182,7 +199,7 @@ class Radar(object):
         )
         self.zeroconf_ann = Zeroconf()
         self.zeroconf_ann.register_service(self.info_ann)
-        print(f"Your device {colored(curr_device_info['name'], 'blue')} is now online and discoverable.")
+        # print(f"Your device {colored(curr_device_info['name'], 'blue')} is now online and discoverable.")
         self.is_discoverable.set()
     
     def browse(self):
@@ -193,7 +210,7 @@ class Radar(object):
         self.announce()
         self.zeroconf_browse = Zeroconf()
         self.service_browser = ServiceBrowser(self.zeroconf_browse, self.service_type, self)
-        print("Starting to browse for devices on the InterAct platform...")
+        # print("Starting to browse for devices on the InterAct platform...")
         self.is_browsing.set()
     
     def stop_browsing(self):
@@ -218,7 +235,7 @@ class Radar(object):
             print("Your device is already undiscoverable.")
             return
         self.is_discoverable.clear()
-        if self.zerconf_browse:
+        if self.zeroconf_browse:
             print("Stopping the service browser before unregistering the service.")
         self.stop_browsing()
         if self.zeroconf_ann:
