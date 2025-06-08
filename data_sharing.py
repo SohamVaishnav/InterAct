@@ -6,6 +6,8 @@ import threading
 from datetime import datetime
 from termcolor import colored
 from tqdm import tqdm
+from zeroconf import Zeroconf
+import time
 
 curr_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(curr_dir))
@@ -37,6 +39,7 @@ class DataSharing(object):
         assert isinstance(file_packet_size, int) and file_packet_size > 0, "file_packet_size must be a positive integer"
 
         self.file_packet_size = file_packet_size
+        self.service_type = "_interact._tcp.local."
         self.received_files_dir = os.path.join(self.root_usr_dir, "received_files")
         if not os.path.exists(self.received_files_dir):
             os.makedirs(self.received_files_dir)
@@ -144,9 +147,80 @@ class DataSharing(object):
             usr_socket.close()
             print("File transfer server closed.")
     
-    def file_sharing(self):
+    def file_sharing(self, filepath:str, receiver_name:str, receiver_ip:str):
         """
         Handles the file sharing process between two devices.
+
+        Args:
+            filepath (str): The path to the file to be shared.
+            receiver_name (str): The name of the receiver device.
+            receiver_ip (str): The IP address of the receiver device.
+        
+        Raises:
+            FileNotFoundError: If the specified file does not exist.
         """
+        assert os.path.exists(filepath), f"File {filepath} does not exist."
+        assert isinstance(receiver_name, str) and receiver_name, "receiver_name must be a non-empty string"
+        assert isinstance(receiver_ip, str) and receiver_ip, "receiver_ip must be a non-empty string"
+
+        self.send_file_flag = True
+        receiver_info = self.curr_device.get_contacts_by_ip(receiver_ip)
+        if receiver_info.empty:
+            print(f"Receiver {colored(receiver_name, 'blue')} not found in contacts. Do you wish to continue? ({colored('y[es]}', 'green')}/{colored('n[o])', 'red')}")
+            choice = input().strip().lower()
+            if choice != 'y':
+                print(colored("File sharing cancelled.", 'red'))
+                self.send_file_flag = False
+                return
+            print(f"Checking for Receiver {colored(receiver_name, 'blue')} availability...")
+            info = Zeroconf().get_service_info(self.service_type, receiver_name + '.'+ self.service_type)
+            if info is None:
+                print(f"Receiver {colored(receiver_name, 'blue')} is {colored('offline', 'red')}. Please check the device and try again.")
+                self.send_file_flag = False
+                return
+            print(colored("Receiver is online.", 'green'))
+        else:
+            print(f"Receiver {colored(receiver_name, 'blue')} found in contacts. Checking availability...")
+            self.send_file_flag = receiver_info['status'] == 'online'
+        if not self.send_file_flag:
+            print(f"Receiver {colored(receiver_name, 'blue')} is {colored('offline', 'red')}. Please check the device and try again.")
+            return
+        print(colored("Receiver is online.", 'green'))
+        print(f"Initiating file transfer to {colored(receiver_name, 'blue')} at {colored(receiver_ip, 'cyan')}...")
+        receiver_port = receiver_info['port'] if not receiver_info.empty else ValueError(colored("Receiver port not found in contacts.", 'red'))
+        receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            receiver_socket.connect((receiver_ip, receiver_port))
+            print(f"Connected to {colored(receiver_name, 'blue')} at {colored(receiver_ip, 'cyan')}:{colored(receiver_port, 'light_cyan')}.")
+            filename = os.path.basename(filepath)
+            filesize = os.path.getsize(filepath)
+            metadata = f"{filename}|{filesize}|{self.curr_device.name}"
+            receiver_socket.sendall(metadata.encode('utf-8'))
+            time.sleep(0.1)
+            print(colored("Metadata sent.", 'green'))
+
+            sent_size = 0
+            with open(filepath, 'rb') as f:
+                filesize_loop = tqdm(range(filesize), desc=f"Sending {filename} to {receiver_name}", unit='B')
+                for _ in filesize_loop:
+                    data = f.read(self.file_packet_size)
+                    if not data:
+                        break
+                    receiver_socket.sendall(data)
+                    filesize_loop.update(len(data))
+                    sent_size += len(data)
+            print(colored(f"File '{colored(filename, 'yellow')}' sent successfully to {colored(receiver_name, 'blue')}.", 'green'))
+        except (socket.error, ConnectionResetError) as e:
+            print(f"Connection error: {e}")
+        except Exception as e:
+            print(f"Unexpected error while sending file: {e}")
+        finally:
+            receiver_socket.close()
+            print(f"Connection with {colored(receiver_name, 'blue')} closed.")
+
+
+        
+
+
 
     
