@@ -76,6 +76,8 @@ class User(object):
             self.file_transfer_port = kwargs['file_transfer_port']
         if 'ip_address' in kwargs:
             self.ip_address = kwargs['ip_address']
+        else:
+            self.ip_address = self.get_ip()
 
         if not self.account_exists:
             new_user = pd.DataFrame({
