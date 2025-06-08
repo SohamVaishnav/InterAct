@@ -3,7 +3,7 @@ import os
 import sys
 import threading
 import socket
-from zeroconf import Zeroconf, ServiceBrowser, ServiceStateChange
+from zeroconf import Zeroconf, ServiceBrowser, ServiceInfo
 import datetime
 from termcolor import colored
 
@@ -40,6 +40,8 @@ class Radar(object):
         assert isinstance(self.curr_device, User), "Current device must be an instance of User."
 
         self.service_type = "_interact._tcp.local."
+        self.is_discoverable = threading.Event()
+        self.is_browsing = threading.Event()
     
     def add_service(self, zeroconf_instance, type, name):
         """
@@ -153,32 +155,74 @@ class Radar(object):
             self.curr_device.update_contacts_status(device['ip_address'], 'online', port=device['port'], last_active=device['last_active'], name=device['name'], mode=device['mode'])
             # print(f"Device {colored(device['name'], 'blue')} at {colored(device['ip_address'], 'cyan')}:{colored(device['port'], 'light_cyan')} saved as contact.")
         print(f"Selected devices have been saved as contacts in your contact list. You can check the contacts using the {colored('show_contacts', 'yellow', attrs=['underlined'])} command.")
-        
-    def background_process(self):
-        """
-        Initialises the background process by announcing the current device and starting the service browser for discovering other devices.
-        This method is intended to be run in a separate thread to avoid blocking the main thread.
-
-        Raises:
-            AssertionError: If the `curr_device` is not an instance of `User`.
-        """
     
     def announce(self):
         """
         Announces the current device on the network using Zeroconf. This ensures that the device is online and 
         discoverable by other devices on the InterAct platform.
         """
+        curr_device_info = self.curr_device.identify.iloc[0]
+        if curr_device_info.empty:
+            print("Current device information is not available. Please register your device first.")
+            return
+        self.info_ann = ServiceInfo(
+            self.service_type,
+            f"{curr_device_info['name']}.{self.service_type}",
+            addresses=[socket.inet_aton(curr_device_info['ip_address'])],
+            port=curr_device_info['port'],
+            properties={
+                'name': curr_device_info['name'],
+                'status': curr_device_info['status'],
+                'last_active': curr_device_info['last_active'],
+                'mode': curr_device_info['mode']
+            },
+            server=f"{socket.gethostname()}.local."
+        )
+        self.zeroconf_ann = Zeroconf()
+        self.zeroconf_ann.register_service(self.info_ann)
+        print(f"Your device {colored(curr_device_info['name'], 'blue')} is now online and discoverable.")
+        self.is_discoverable.set()
     
     def browse(self):
         """
         Starts the service browser to discover other devices on the InterAct platform - only those that are online will be discovered.
         """
+        self.announce() if not self.is_discoverable.is_set() else None
+        self.zeroconf_browse = Zeroconf()
+        self.service_browser = ServiceBrowser(self.zeroconf_browse, self.service_type, self)
+        print("Starting to discover devices on the InterAct platform...")
+        self.is_browsing.set()
     
-    def threaded_process(self):
+    def stop_browsing(self):
         """
-        Runs the background process in a separate thread to avoid blocking the main thread.
+        Stops the service browser. The current device will still remain discoverable on other devices.
         """
+        if not self.is_browsing.is_set():
+            print("No active service browser to stop.")
+            return
+        self.is_browsing.clear()
+        if self.zeroconf_browse:
+            self.zeroconf_browse.close()
+            self.service_browser.cancel()
+            self.zerconf_browse = None
+            print("Stopped discovering devices on the InterAct platform.")
         
+    def stop_announcing(self):
+        """
+        Stops the announcement of the current device on the network. This makes the device no longer discoverable by other devices.
+        """
+        if not self.is_discoverable.is_set():
+            print("Your device is already undiscoverable.")
+            return
+        self.is_discoverable.clear()
+        if self.zerconf_browse:
+            print("Stopping the service browser before unregistering the service.")
+        self.stop_browsing()
+        if self.zeroconf_ann:
+            self.zeroconf_ann.unregister_service(self.info_ann)
+            self.zeroconf_ann.close()
+            self.zeroconf_ann = None
+            print("Your device is now off-the-grid.")
         
 c = Radar(root_usr_dir="./Data", curr_device=User(root_usr_dir="./Data"))
 
