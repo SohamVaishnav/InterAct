@@ -179,7 +179,7 @@ class DataSharing(object):
             #     return
             # receiver_ip = socket.inet_ntoa(info.addresses[0])
             for device in self.radar.devices:
-                if device.name == receiver_name:
+                if device['name'] == receiver_name:
                     receiver_ip = device.ip_address
                     self.send_file_flag = (device.status == 'online').values[0]
                     break
