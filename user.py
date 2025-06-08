@@ -31,7 +31,7 @@ class User(object):
             self.account_exists = True
             self.name = self.identify['name'].values[0]
             self.file_transfer_port = self.identify['port'].values[0]
-            self.ip_address = self.identify['ip_address'].values[0]
+            self.ip_address = self.get_ip()
         else:
             self.account_exists = False
             self.name = f'Device_new'
@@ -74,6 +74,8 @@ class User(object):
             self.name = kwargs['name']
         if 'file_transfer_port' in kwargs:
             self.file_transfer_port = kwargs['file_transfer_port']
+        if 'ip_address' in kwargs:
+            self.ip_address = kwargs['ip_address']
 
         if not self.account_exists:
             new_user = pd.DataFrame({
