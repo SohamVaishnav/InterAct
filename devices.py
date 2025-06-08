@@ -19,8 +19,9 @@ class Radar(object):
     """
     def __init__(self, root_usr_dir: str, curr_device: User):
         """
-        Initialises the Radar class for discovering devices. \
+        Initialises the Radar class for discovering devices. \\
         Note that the service type is set to `_interact._tcp.local.` by default, which is used for service discovery in the InterAct platform.
+        Also, the ping port has been set to `12346` by default, which is used for pinging devices to ensure their availability.
 
         Args:
             root_usr_dir (str): The root directory where user data is stored.
@@ -43,6 +44,7 @@ class Radar(object):
         self.service_type = "_interact._tcp.local."
         self.is_discoverable = threading.Event()
         self.is_browsing = threading.Event()
+        self.ping_port = 12346
     
     def add_service(self, zeroconf_instance, type, name):
         """
@@ -243,6 +245,29 @@ class Radar(object):
             self.zeroconf_ann.close()
             self.zeroconf_ann = None
             print("Your device is now off-the-grid.")
+    
+    def pinger(self):
+        """
+        Pings the other device to ensure its availability.        
+        """
+        ping_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        ping_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        ping_socket.settimeout(2)
+        try:
+            ping_socket.bind(('', self.ping_port))
+            ping_socket.listen(1)
+            while True:
+                connection, address = ping_socket.accept()
+                connection.close()
+        except OSError as e:
+            print(f"Socket error: {e}. Ping port might be already in use. Please try a different port.")
+            print(ping_socket.getsockname())
+        except KeyboardInterrupt:
+            print("Stopping the ping server.")
+        except Exception as e:
+            print(f"An error occurred while starting the ping server: {e}")
+        finally:
+            ping_socket.close()
         
-c = Radar(root_usr_dir="./Data", curr_device=User(root_usr_dir="./Data"))
+# c = Radar(root_usr_dir="./Data", curr_device=User(root_usr_dir="./Data"))
 
