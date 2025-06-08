@@ -56,14 +56,14 @@ class Radar(object):
         if info:
             device = {
                 'name': info.name.split('.')[0],
-                'ip_address': socket.inet_ntoa(info.address),
+                'ip_address': socket.inet_ntoa(info.addresses[0]),
                 'port': info.port,
                 'status': 'online',
                 'last_active': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 'mode': 'auto'
             }
             self.devices.append(device)
-            # print(f"Device {colored(device['name'], 'blue')} at {colored(device['ip_address'], 'cyan')}:{colored(device['port'], 'light_cyan')} found {colored('online', 'green')}.")
+            print(f"Device {colored(device['name'], 'blue')} at {colored(device['ip_address'], 'cyan')}:{colored(device['port'], 'light_cyan')} found {colored('online', 'green')}.")
             # self.curr_device.update_contacts_status(device['ip_address'], 'online', port=device['port'], last_active=device['last_active'], name=device['name'], mode=device['mode'])
         else:
             return
@@ -78,18 +78,20 @@ class Radar(object):
             name (str): The name of the service.
         """
         device_name = name.split('.')[0]
-        info = zeroconf_instance.get_service_info(type, name)
-        ip_address = socket.inet_ntoa(info.address)
+        # info = zeroconf_instance.get_service_info(type, name)
+        # ip_address = socket.inet_ntoa(info.address[0])
+        device_info = self.curr_device.get_contacts_by_name(device_name)
+        if not device_info.empty:
+            self.curr_device.update_contacts_status(device_info['ip_address'], 'offline')
+            print(f"Device {colored(device_name, 'blue')} at {colored(device_info['ip_address'], 'cyan')} went {colored('offline', 'red')}.")
         self.devices = [device for device in self.devices if device['name'] != device_name]
-        self.curr_device.update_contacts_status(ip_address, 'offline')
-        print(f"Device {colored(device_name, 'blue')} at {colored(ip_address, 'cyan')} just went {colored('offline', 'red')}.")
 
     
-    def update_service(self): 
+    def update_service(self, zeroconf_instance, type, name): 
         """
         Updates device
         """
-        pass
+        self.add_service(zeroconf_instance, type, name)
     
     def verify(self, device_name: str, ip_address: str, port: int):
         """
@@ -115,7 +117,7 @@ class Radar(object):
         #     return False
         info = Zeroconf().get_service_info(self.service_type, device_name + '.' + self.service_type)
         if info:
-            ip_address = socket.inet_ntoa(info.address)
+            ip_address = socket.inet_ntoa(info.addresses[0])
             if ip_address == ip_address and info.port == port:
                 return True
         print(f"Device {colored(device_name, 'blue')} at {colored(ip_address, 'cyan')}:{colored(port, 'light_cyan')} is offline or unreachable.")
@@ -169,7 +171,7 @@ class Radar(object):
             self.service_type,
             f"{curr_device_info['name']}.{self.service_type}",
             addresses=[socket.inet_aton(curr_device_info['ip_address'])],
-            port=curr_device_info['port'],
+            port=int(curr_device_info['port']),
             properties={
                 'name': curr_device_info['name'],
                 'status': curr_device_info['status'],
@@ -187,10 +189,11 @@ class Radar(object):
         """
         Starts the service browser to discover other devices on the InterAct platform - only those that are online will be discovered.
         """
-        self.announce() if not self.is_discoverable.is_set() else None
+        # self.announce() if not self.is_discoverable.is_set() else None
+        self.announce()
         self.zeroconf_browse = Zeroconf()
         self.service_browser = ServiceBrowser(self.zeroconf_browse, self.service_type, self)
-        print("Starting to discover devices on the InterAct platform...")
+        print("Starting to browse for devices on the InterAct platform...")
         self.is_browsing.set()
     
     def stop_browsing(self):
