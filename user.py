@@ -139,7 +139,7 @@ class User(object):
             else:
                 self.contacts.loc[self.contacts['ip_address'] == ip_address, 'last_active'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.usr_file = pd.concat([self.identify, self.contacts], ignore_index=True)
-            self.urs_file.to_csv(os.path.join(self.root_usr_dir, "users.csv"), index=False)
+            self.usr_file.to_csv(os.path.join(self.root_usr_dir, "users.csv"), index=False)
 
             self.identify = self.usr_file[self.usr_file['self'] == 1]
             self.contacts = self.usr_file[self.usr_file['self'] == 0]
