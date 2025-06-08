@@ -160,6 +160,24 @@ class InterActTerminal(cmd.Cmd):
         indices = indices_str.split(' ')
         self.radar.save_devices_as_contacts([int(i) for i in indices if i.isdigit()])
     
+    def do_send(self, arg):
+        """
+        Send a file to a device: send <device_name> <file_path>
+        """
+        parts = arg.split()
+        if len(parts) != 2:
+            print("Usage: send <device_name> <file_path>")
+            return
+        receiver_name, file_path = parts
+        if not os.path.isfile(file_path):
+            print(f"File '{file_path}' does not exist.")
+            return
+        receiver_info = self.curr_device.get_contacts_by_name(receiver_name)
+        if receiver_info.empty:
+            print(f"No contact found with name '{receiver_name}'.")
+            print("Enter IP Address")
+        self.data_transferer.file_sharing(file_path, receiver_name)
+    
     def do_clear(self, arg):
         """
         Clear the terminal screen.
