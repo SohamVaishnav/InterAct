@@ -141,7 +141,7 @@ class DataSharing(object):
         except KeyboardInterrupt:
             print("Stopping the file transfer server.")
         except OSError as e:
-            print(f"Socket error: {e}. This port might be already in use. Please try a different port.")
+            print(f"Socket error: {e}. File transfer port might be already in use. Please try a different port.")
         except Exception as e:
             print(f"An error occurred while starting the file transfer server: {e}")
         finally:
@@ -219,12 +219,6 @@ class DataSharing(object):
         finally:
             receiver_socket.close()
             print(f"Connection with {colored(receiver_name, 'blue')} closed.")
-    
-    def pinger(self):
-        """
-        Pings the other device to ensure its availability.        
-        """
-
 
         
 
