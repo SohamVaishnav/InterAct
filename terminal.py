@@ -111,7 +111,7 @@ class InterActTerminal(cmd.Cmd):
     def do_browse(self, arg):
         """Discover nearby devices."""
         self.radar.browse()
-        print("The device is already browsing...")
+        print("Browsing...")
     
     def do_stop_browsing(self, arg):
         """Stop discovering devices."""
