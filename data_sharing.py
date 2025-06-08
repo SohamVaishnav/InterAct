@@ -56,7 +56,7 @@ class DataSharing(object):
         sender_ip, sender_port = sender_address
         threading.current_thread().name = f"Receiving_Thread-{sender_ip}:{sender_port}"
         sender_info = self.curr_device.get_contacts_by_ip(sender_ip)
-        if sender_info:
+        if not sender_info.empty:
             print(f"Sender identified as {colored(sender_info['name'], 'blue')} at {colored(sender_ip, 'cyan')}:{colored(sender_port, 'light_cyan')}")
         else:
             print(f"Sender not in your contacts. Identified at {colored(sender_ip, 'cyan')}:{colored(sender_port, 'light_cyan')}")
@@ -123,14 +123,15 @@ class DataSharing(object):
             AssertionError: If the `curr_device` is not an instance of `User`.
         """
         assert isinstance(self.curr_device, User), "curr_device must be an instance of User"
-        print(f"Your device {colored(self.curr_device.name, 'blue')} is ready to accept files.")
+        print(f"Background processes initiated.\n")
+        print(f"Your device {colored(self.curr_device.name, 'blue')} is online, discoverable and browsing on the {colored('InterAct Platform', 'magenta', attrs=['bold'])}.")
         usr_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         usr_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
         try:
             usr_socket.bind(('', self.curr_device.file_transfer_port)) # Bind to all network interfaces on the specified port
             usr_socket.listen(5)
-            print(f"Listening for incoming file transfers on {colored(self.curr_device.file_transfer_port, 'light_cyan')}...")
+            # print(f"Listening for incoming file transfers on {colored(self.curr_device.file_transfer_port, 'light_cyan')}...")
 
             while True:
                 sender_socket, sender_address = usr_socket.accept()
@@ -178,6 +179,7 @@ class DataSharing(object):
                 print(f"Receiver {colored(receiver_name, 'blue')} is {colored('offline', 'red')}. Please check the device and try again.")
                 self.send_file_flag = False
                 return
+            receiver_ip = socket.inet_ntoa(info.addresses[0])
             print(colored("Receiver is online.", 'green'))
         else:
             print(f"Receiver {colored(receiver_name, 'blue')} found in contacts. Checking availability...")
@@ -217,6 +219,11 @@ class DataSharing(object):
         finally:
             receiver_socket.close()
             print(f"Connection with {colored(receiver_name, 'blue')} closed.")
+    
+    def pinger(self):
+        """
+        Pings the other device to ensure its availability.        
+        """
 
 
         
