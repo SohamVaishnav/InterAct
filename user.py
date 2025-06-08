@@ -89,7 +89,7 @@ class User(object):
             self.account_exists = True
         else:
             self.usr_file.loc[self.usr_file['self'] == 1, ['name', 'ip_address', 'port', 'status', 'last_active']] = [
-                self.name, self.ip_address, self.file_transfer_port, 'online', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                self.name, self.ip_address, self.file_transfer_port, kwargs.get('status', 'online'), datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             ]
         
         self.usr_file.to_csv(os.path.join(self.root_usr_dir, "users.csv"), index=False)
@@ -109,6 +109,14 @@ class User(object):
             name (str): The name of the contact to search for.
         """
         return self.contacts[self.contacts['name'] == name]
+    
+    def get_contacts_by_ip(self, ip_address:str):
+        """
+        Get the contacts of the user by IP address.
+        Args:
+            ip_address (str): The IP address of the contact to search for.
+        """
+        return self.contacts[self.contacts['ip_address'] == ip_address]
 
     def update_contacts_status(self, ip_address:str, status:str, **kwargs):
         """
