@@ -52,6 +52,9 @@ class InterActTerminal(cmd.Cmd):
         Initiates background processes for device discovery and file transfer.
         """
         print("Initiating background processes for device discovery and file transfer...")
+        ping_thread = threading.Thread(target=self.radar.pinger,
+                                       name='Ping_Thread',
+                                       daemon=True).start()
         background_thread = threading.Thread(target=self.data_transferer.background_process,
                                              name='Background_Thread',
                                             daemon=True).start()
