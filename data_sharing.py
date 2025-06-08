@@ -72,9 +72,9 @@ class DataSharing(object):
                 filename, filesize, sender_name = meta_data
                 filesize = int(filesize)
 
-                if not sender_info:
+                if sender_info.empty:
                     print(f"Unknown sender name found in metadata - {colored(sender_name, 'blue')}.")
-                if sender_info and sender_info['name'] != sender_name:
+                if not sender_info.empty and sender_info['name'].values[0] != sender_name:
                     print(f"Sender name {colored('mismatch', 'red')}: {colored(sender_info['name'], 'blue')} vs {colored(sender_name, 'yellow')}. Using metadata sender name.")
                 print(f"Receiving file '{colored(filename, 'yellow')}' ({colored(str(filesize), 'light_yellow')} bytes) from {colored(sender_name, 'blue')}.")
             else:
@@ -148,24 +148,22 @@ class DataSharing(object):
             usr_socket.close()
             print("File transfer server closed.")
     
-    def file_sharing(self, filepath:str, receiver_name:str, receiver_ip:str):
+    def file_sharing(self, filepath:str, receiver_name:str):
         """
         Handles the file sharing process between two devices.
 
         Args:
             filepath (str): The path to the file to be shared.
             receiver_name (str): The name of the receiver device.
-            receiver_ip (str): The IP address of the receiver device.
         
         Raises:
             FileNotFoundError: If the specified file does not exist.
         """
         assert os.path.exists(filepath), f"File {filepath} does not exist."
         assert isinstance(receiver_name, str) and receiver_name, "receiver_name must be a non-empty string"
-        assert isinstance(receiver_ip, str) and receiver_ip, "receiver_ip must be a non-empty string"
 
         self.send_file_flag = True
-        receiver_info = self.curr_device.get_contacts_by_ip(receiver_ip)
+        receiver_info = self.curr_device.get_contacts_by_name(receiver_name)
         if receiver_info.empty:
             print(f"Receiver {colored(receiver_name, 'blue')} not found in contacts. Do you wish to continue? ({colored('y[es]}', 'green')}/{colored('n[o])', 'red')}")
             choice = input().strip().lower()
@@ -174,22 +172,27 @@ class DataSharing(object):
                 self.send_file_flag = False
                 return
             print(f"Checking for Receiver {colored(receiver_name, 'blue')} availability...")
-            info = Zeroconf().get_service_info(self.service_type, receiver_name + '.'+ self.service_type)
-            if info is None:
-                print(f"Receiver {colored(receiver_name, 'blue')} is {colored('offline', 'red')}. Please check the device and try again.")
-                self.send_file_flag = False
-                return
-            receiver_ip = socket.inet_ntoa(info.addresses[0])
-            print(colored("Receiver is online.", 'green'))
+            # info = Zeroconf().get_service_info(self.service_type, receiver_name + '.'+ self.service_type)
+            # if info is None:
+            #     print(f"Receiver {colored(receiver_name, 'blue')} is {colored('offline', 'red')}. Please check with the receiver and try again.")
+            #     self.send_file_flag = False
+            #     return
+            # receiver_ip = socket.inet_ntoa(info.addresses[0])
+            for device in self.radar.devices:
+                if device.name == receiver_name:
+                    receiver_ip = device.ip_address
+                    self.send_file_flag = (device.status == 'online').values[0]
+                    break
         else:
             print(f"Receiver {colored(receiver_name, 'blue')} found in contacts. Checking availability...")
-            self.send_file_flag = receiver_info['status'] == 'online'
+            self.send_file_flag = (receiver_info['status'] == 'online').values[0]
+            receiver_ip = receiver_info['ip_address'].values[0]
         if not self.send_file_flag:
             print(f"Receiver {colored(receiver_name, 'blue')} is {colored('offline', 'red')}. Please check the device and try again.")
             return
         print(colored("Receiver is online.", 'green'))
         print(f"Initiating file transfer to {colored(receiver_name, 'blue')} at {colored(receiver_ip, 'cyan')}...")
-        receiver_port = receiver_info['port'] if not receiver_info.empty else ValueError(colored("Receiver port not found in contacts.", 'red'))
+        receiver_port = int(receiver_info['port'].values[0]) if not receiver_info.empty else ValueError(colored("Receiver port not found in contacts.", 'red'))
         receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             receiver_socket.connect((receiver_ip, receiver_port))
