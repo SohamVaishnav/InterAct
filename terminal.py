@@ -5,7 +5,7 @@ import sys
 from termcolor import colored
 from prompt_toolkit import prompt
 from prompt_toolkit.completion import WordCompleter
-from tqdm import tqdm
+import logging
 
 curr_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(curr_dir))
@@ -21,14 +21,35 @@ word_completer = WordCompleter([
     'register', 'self_config', 'show_contacts', 'discover', 
     'add_manually', 'add', 'clear', 'exit'
     ])
+
+class Logger(logging.Handler):
+    """
+    Class for handling the logging of messages in the terminal.
+    """
+    def __init__(self, terminal:cmd.Cmd):
+        super().__init__()
+        self.terminal = terminal
+    
+    def emit(self, record):
+        """
+        Emit a log record to the terminal.
+        """
+        msg = self.format(record)
+        self.terminal.print(msg)
+
 class InterActTerminal(cmd.Cmd):
     prompt = colored("interact~ ","green", attrs=['bold'])
 
     def __init__(self):
         super().__init__()
+        # self.logging_handler()
+
         intro = "\nWelcome to InterAct - Social media platform for devices!\n"
         print(intro)
+
         self.curr_device = User(root_usr_dir="./Data")
+        self.curr_device.update_user()
+
         self.account_exists = self.curr_device.account_exists
         if not self.account_exists:
             print("Hey! You seem to be new on the platform.")
@@ -47,6 +68,18 @@ class InterActTerminal(cmd.Cmd):
         self.data_transferer = DataSharing(root_usr_dir="./Data", curr_device=self.curr_device, radar=self.radar)
         self.initiate_background_processes()
     
+    # def logging_handler(self):
+    #     """
+    #     Sets up the logging handler for the terminal.
+    #     """
+    #     self.logger = logging.getLogger('InterActTerminal')
+    #     self.logger.setLevel(logging.INFO)
+    #     handler = Logger(self)
+
+    #     formatter = logging.Formatter('%(message)s')
+    #     handler.setFormatter(formatter)
+    #     self.logger.addHandler(handler)
+    
     def initiate_background_processes(self):
         """
         Initiates background processes for device discovery and file transfer.
@@ -62,6 +95,37 @@ class InterActTerminal(cmd.Cmd):
         self.do_browse(arg='') 
         print("You can now discover nearby devices and share files with them!")
 
+    def check_for_send(self, file_path, receiver_name):
+        self.send_file_flag = False
+        receiver_info = self.curr_device.get_contacts_by_name(receiver_name)
+        if receiver_info.empty:
+            print(f"Receiver {colored(receiver_name, 'blue')} not found in contacts. Do you wish to continue? ({colored('y[es]}', 'green')}/{colored('n[o])', 'red')}")
+            choice = input().strip().lower()
+            if choice != 'y':
+                print(colored("File sharing cancelled.", 'red'))
+                return None, None
+            print(f"Checking for Receiver {colored(receiver_name, 'blue')} availability...")
+            
+            for device in self.radar.devices:
+                if device['name'] == receiver_name:
+                    receiver_ip = device['ip_address']
+                    receiver_port = device['port']
+                    self.send_file_flag = device['status'] == 'online'
+                    break
+        else:
+            print(f"Receiver {colored(receiver_name, 'blue')} found in contacts. Checking availability...")
+            self.send_file_flag = (receiver_info['status'] == 'online').values[0]
+            receiver_ip = receiver_info['ip_address'].values[0]
+            receiver_port = int(receiver_info['port'].values[0])
+        if not self.send_file_flag:
+            print(f"Receiver {colored(receiver_name, 'blue')} is {colored('offline', 'red')}. Please check the device and try again.")
+            return None, None
+        
+        print(colored("Receiver is online.", 'green'))
+        print(f"Initiating file transfer to {colored(receiver_name, 'blue')} at {colored(receiver_ip, 'cyan')}...")
+
+        return receiver_ip, receiver_port
+    
     def do_register(self, arg):
         """Register this device with a name: register <device_name>"""
         name = arg.strip()
@@ -169,14 +233,29 @@ class InterActTerminal(cmd.Cmd):
             print("Usage: send <device_name> <file_path>")
             return
         receiver_name, file_path = parts
+
         if not os.path.isfile(file_path):
             print(f"File '{file_path}' does not exist.")
             return
-
-        threading.Thread(target=self.data_transferer.file_sharing,
-                                       args=(file_path, receiver_name),
-                                       name='File_Send_Thread',
-                                       daemon=True).start()
+        
+        
+        receiver_ip, receiver_port = self.check_for_send(file_path, receiver_name)
+        if self.send_file_flag:
+            # threading.Thread(target=self.data_transferer.file_sharing,
+            #                 args=(file_path, receiver_name, receiver_ip, receiver_port),
+            #                name='File_Send_Thread', daemon=True).start()
+            self.data_transferer.file_sharing(file_path, receiver_name, receiver_ip, receiver_port)
+    
+    def do_ping(self, arg):
+        """
+        Ping a device to check its availability: ping <device_name> <ip_address> <port>
+        """
+        parts = arg.split()
+        if len(parts) != 3:
+            print("Usage: ping <device_name> <ip_address> <port>")
+            return
+        device_name, ip_address, port = parts
+        self.radar.verify(device_name, ip_address, int(port))
     
     def do_clear(self, arg):
         """
