@@ -17,26 +17,6 @@ from data_sharing import *
 f = Figlet(font='slant')
 print(f.renderText('InterAct'))
 
-word_completer = WordCompleter([
-    'register', 'self_config', 'show_contacts', 'discover', 
-    'add_manually', 'add', 'clear', 'exit'
-    ])
-
-class Logger(logging.Handler):
-    """
-    Class for handling the logging of messages in the terminal.
-    """
-    def __init__(self, terminal:cmd.Cmd):
-        super().__init__()
-        self.terminal = terminal
-    
-    def emit(self, record):
-        """
-        Emit a log record to the terminal.
-        """
-        msg = self.format(record)
-        self.terminal.print(msg)
-
 class InterActTerminal(cmd.Cmd):
     prompt = colored("interact~ ","green", attrs=['bold'])
 
@@ -48,7 +28,6 @@ class InterActTerminal(cmd.Cmd):
         print(intro)
 
         self.curr_device = User(root_usr_dir="./Data")
-        self.curr_device.update_user()
 
         self.account_exists = self.curr_device.account_exists
         if not self.account_exists:
@@ -62,23 +41,12 @@ class InterActTerminal(cmd.Cmd):
                 self.curr_device.update_user(name=f'Device_{self.curr_device.ip_address}')
             print("\n")
         print(f"Hey, {colored(self.curr_device.name, 'green')}! What's up?")
+        self.curr_device.update_user()
         print(f"Type {colored('help', 'yellow', attrs=['underline'])} or {colored('?', 'yellow', attrs=['underline'])} to see the available commands.\n")
 
         self.radar = Radar(root_usr_dir="./Data", curr_device=self.curr_device)
         self.data_transferer = DataSharing(root_usr_dir="./Data", curr_device=self.curr_device, radar=self.radar)
         self.initiate_background_processes()
-    
-    # def logging_handler(self):
-    #     """
-    #     Sets up the logging handler for the terminal.
-    #     """
-    #     self.logger = logging.getLogger('InterActTerminal')
-    #     self.logger.setLevel(logging.INFO)
-    #     handler = Logger(self)
-
-    #     formatter = logging.Formatter('%(message)s')
-    #     handler.setFormatter(formatter)
-    #     self.logger.addHandler(handler)
     
     def initiate_background_processes(self):
         """
@@ -126,17 +94,17 @@ class InterActTerminal(cmd.Cmd):
 
         return receiver_ip, receiver_port
     
-    def do_register(self, arg):
-        """Register this device with a name: register <device_name>"""
-        name = arg.strip()
-        if not name:
-            print("Usage: register <device_name>")
-        else:
-            if self.curr_device.name != name:
-                self.curr_device.update_user(name=name)
-                print(f"Device registered as '{colored(name, 'blue')}'")
-            else:
-                print(f"Device is already registered as '{colored(name, 'blue')}'")
+    # def do_register(self, arg):
+    #     """Register this device with a name: register <device_name>"""
+    #     name = arg.strip()
+    #     if not name:
+    #         print("Usage: register <device_name>")
+    #     else:
+    #         if self.curr_device.name != name:
+    #             self.curr_device.update_user(name=name)
+    #             print(f"Device registered as '{colored(name, 'blue')}'")
+    #         else:
+    #             print(f"Device is already registered as '{colored(name, 'blue')}'")
     
     def do_self_config(self, arg):
         """
@@ -207,10 +175,15 @@ class InterActTerminal(cmd.Cmd):
             print("Usage: add_manual <device_name> <ip_address> <port>")
             return
         device_name, ip_address, port = parts
-        device_reachable = self.radar.verify(device_name, ip_address, int(port))
-        if device_reachable:
-            self.curr_device.add_manually(device_name, ip_address, port)
-            print(f"Device '{colored(device_name, 'blue')}' added to contacts.")
+        device_info = self.curr_device.get_contacts_by_name(device_name)
+        if device_info.empty:
+            device_reachable = self.radar.verify(device_name, ip_address, int(port))
+            if device_reachable:
+                self.curr_device.add_manually(device_name, ip_address, port)
+                print(f"Device '{colored(device_name, 'blue')}' added to contacts.")
+        else:
+            print(f"Device '{colored(device_name, 'blue')}' already exists in contacts.")
+            self.curr_device.update_contacts_status(ip_address, status='online', port=int(port), name=device_name)
     
     def do_add(self, arg):
         """
@@ -238,12 +211,8 @@ class InterActTerminal(cmd.Cmd):
             print(f"File '{file_path}' does not exist.")
             return
         
-        
         receiver_ip, receiver_port = self.check_for_send(file_path, receiver_name)
         if self.send_file_flag:
-            # threading.Thread(target=self.data_transferer.file_sharing,
-            #                 args=(file_path, receiver_name, receiver_ip, receiver_port),
-            #                name='File_Send_Thread', daemon=True).start()
             self.data_transferer.file_sharing(file_path, receiver_name, receiver_ip, receiver_port)
     
     def do_ping(self, arg):
