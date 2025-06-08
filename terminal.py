@@ -172,11 +172,11 @@ class InterActTerminal(cmd.Cmd):
         if not os.path.isfile(file_path):
             print(f"File '{file_path}' does not exist.")
             return
-        receiver_info = self.curr_device.get_contacts_by_name(receiver_name)
-        if receiver_info.empty:
-            print(f"No contact found with name '{receiver_name}'.")
-            print("Enter IP Address")
-        self.data_transferer.file_sharing(file_path, receiver_name)
+
+        threading.Thread(target=self.data_transferer.file_sharing,
+                                       args=(file_path, receiver_name),
+                                       name='File_Send_Thread',
+                                       daemon=True).start()
     
     def do_clear(self, arg):
         """
